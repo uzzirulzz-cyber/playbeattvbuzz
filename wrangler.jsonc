@@ -1,0 +1,26 @@
+// PLAYBEATTV on Cloudflare Workers (OpenNext adapter)
+// Deploy: npm run deploy:cf   (first time: `wrangler login` or CLOUDFLARE_API_TOKEN)
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "playbeattv",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-01-15",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Database: create a Hyperdrive binding for your Postgres (recommended), or
+  // connect straight to Neon via the serverless driver (default).
+  // hypervisor example:
+  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<hyperdrive-id>" }],
+  "observability": { "enabled": true },
+  "vars": {
+    "DEPLOY_TARGET": "cloudflare",
+    "XTREAM_API_URL": "https://iptv-api.xtream-masters.com/v3/",
+    "XTREAM_PORTAL_HOST": "portal.playbeattv.buzz"
+  }
+  // Secrets (do NOT put these in vars): DATABASE_URL, JWT_SECRET,
+  // PAYMENTS_WEBHOOK_SECRET, XTREAM_API_KEY
+  // set with: npx wrangler secret put DATABASE_URL  (etc.)
+}

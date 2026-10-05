@@ -270,6 +270,7 @@ export const ADMIN_MODULES: { group: string; items: { key: string; label: string
       { key: 'content-providers', label: 'Content Providers', icon: 'bi-diagram-3' },
       { key: 'streaming-sources', label: 'Streaming Sources', icon: 'bi-hdd-network' },
       { key: 'api-integrations', label: 'API Integrations', icon: 'bi-plug' },
+      { key: 'iptv-lines', label: 'IPTV Lines', icon: 'bi-hdmi' },
       { key: 'users-roles', label: 'Users & Roles', icon: 'bi-person-badge' },
       { key: 'security', label: 'Security', icon: 'bi-shield-check' },
       { key: 'audit-logs', label: 'Audit Logs', icon: 'bi-journal-text' },

@@ -10,6 +10,7 @@ import {
   ResourceView, statusRender, moneyRender, thumbRender,
   type ResourceConfig,
 } from './adminResources';
+import { AdminXtream } from './iptv';
 
 // ─── Router over admin modules ──────────────────────────────
 
@@ -58,6 +59,7 @@ export function AdminApp({ section }: { section: string }) {
     'content-providers': <ResourceView cfg={providersCfg} />,
     'streaming-sources': <ResourceView cfg={sourcesCfg} />,
     'api-integrations': <AdminIntegrations />,
+    'iptv-lines': <AdminXtream />,
     'users-roles': <AdminUsers />,
     security: <AdminSecurity />,
     'audit-logs': <AdminAudit />,

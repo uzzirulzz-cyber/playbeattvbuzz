@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import {
   ApiError, jsonErr, jsonOk, rateLimit, requireAuth, writeAudit, type SessionUser,
 } from '@/lib/auth';
+import { addXtreamLine, billingPeriodToPlan, generateXtreamCredentials, type XtreamPlan } from '@/lib/xtream';
 
 const PERIOD_MONTHS: Record<string, number> = { MONTHLY: 1, QUARTERLY: 3, YEARLY: 12 };
 
@@ -118,6 +119,44 @@ export async function POST(req: Request) {
     });
     if (couponId) await db.coupon.update({ where: { id: couponId }, data: { usedCount: { increment: 1 } } });
 
+    // ── IPTV line provisioning via the reseller API (Xtream Masters) ──
+    let lineStatus = 'PENDING';
+    let lineMsg = 'Provider not configured';
+    let lineUser = '';
+    let linePass = '';
+    const isTrial = plan.trialDays > 0 || plan.price === 0;
+    const xtreamPlan: XtreamPlan = isTrial ? 11 : billingPeriodToPlan(plan.billingPeriod);
+    if (process.env.XTREAM_API_KEY) {
+      const creds = generateXtreamCredentials('pb');
+      const add = await addXtreamLine({
+        user: creds.user, pass: creds.pass, plan: xtreamPlan,
+        connections: Math.min(4, plan.deviceLimit || 1),
+        notice: order.number,
+      });
+      lineMsg = add.msg.slice(0, 300);
+      if (add.ok && add.status === 'success') {
+        lineStatus = 'PROVISIONED';
+        lineUser = creds.user;
+        linePass = creds.pass;
+      } else {
+        lineStatus = 'FAILED';
+      }
+      await db.iptvLine.create({
+        data: {
+          userId: session.id, subscriptionId: subscription.id, type: 'XTREAM',
+          username: creds.user, password: creds.pass, xtreamPlan,
+          connections: Math.min(4, plan.deviceLimit || 1),
+          notice: order.number, status: lineStatus === 'PROVISIONED' ? 'ACTIVE' : 'FAILED',
+          providerMsg: lineMsg,
+        },
+      });
+      await db.subscription.update({
+        where: { id: subscription.id },
+        data: { lineType: 'XTREAM', lineUser, linePass, lineStatus, lineMsg },
+      });
+      await writeAudit(req, session as unknown as SessionUser, 'iptv.provision', 'iptvLine', creds.user, { ok: lineStatus, plan: xtreamPlan });
+    }
+
     await db.notification.create({
       data: { userId: session.id, channel: 'INAPP', title: 'Payment confirmed ✅', body: `Order ${order.number} — ${plan.name} is active until ${expiresAt.toDateString()}. Invoice ${invoice.number} is in your account.` },
     });
@@ -130,6 +169,9 @@ export async function POST(req: Request) {
       total,
       invoice: invoice.number,
       subscription: { id: subscription.id, expiresAt, plan: plan.name },
+      iptvLine: lineStatus === 'PROVISIONED'
+        ? { username: lineUser, password: linePass, status: lineStatus }
+        : { status: lineStatus, message: lineMsg },
     });
   } catch (e) {
     return jsonErr(e);

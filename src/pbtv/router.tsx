@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 
 /** Hash router — routes look like #/live-tv, #/watch/abc, #/admin/plans */
 export function useHashRoute(): { path: string; params: Record<string, string> } {
@@ -29,12 +29,14 @@ export function Link({
   to,
   children,
   className,
+  style,
   onClick,
   ariaLabel,
 }: {
   to: string;
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
   onClick?: () => void;
   ariaLabel?: string;
 }) {
@@ -45,7 +47,7 @@ export function Link({
     navigate(to);
   };
   return (
-    <a href={`#${to}`} onClick={handle} className={className} aria-label={ariaLabel}>
+    <a href={`#${to}`} onClick={handle} className={className} style={style} aria-label={ariaLabel}>
       {children}
     </a>
   );

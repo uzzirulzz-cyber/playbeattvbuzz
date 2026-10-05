@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -47,6 +47,7 @@ model User {
   ticketMsgs    TicketMessage[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  iptvLines     IptvLine[]
 }
 
 // ─── Content: Channels / EPG ────────────────────────────────
@@ -303,10 +304,40 @@ model Subscription {
   expiresAt    DateTime
   autoRenew    Boolean   @default(true)
   devicesLimit Int       @default(1)
+  lineType     String    @default("") // XTREAM | ACTIVECODE | MAC
+  lineUser     String    @default("")
+  linePass     String    @default("")
+  lineStatus   String    @default("") // PROVISIONED | PENDING | FAILED | DELETED
+  lineMsg      String    @default("")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  iptvLines IptvLine[]
+
   @@index([userId, status])
+  @@index([lineUser])
+}
+
+/// Admin-provisioned IPTV lines (walk-in sales, manual xtream/activecode/MAC lines)
+model IptvLine {
+  id             String   @id @default(cuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id])
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  type           String   @default("XTREAM") // XTREAM | ACTIVECODE | MAC
+  username       String
+  password       String   @default("")
+  xtreamPlan     Int      @default(1) // 11 trial, 1, 2, 3, 4
+  connections    Int      @default(1)
+  notice         String   @default("")
+  status         String   @default("ACTIVE") // ACTIVE | PROVISIONING | FAILED | DELETED
+  providerMsg    String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([username])
 }
 
 model Device {

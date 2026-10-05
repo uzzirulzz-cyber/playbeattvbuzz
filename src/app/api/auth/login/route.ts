@@ -7,7 +7,7 @@ import {
 export async function POST(req: Request) {
   try {
     rateLimit(req, 'login', 15, 60_000);
-    const body = (await req.json()) as Record<string, string>;
+    const body = (await req.json()) as { email?: string; password?: string; remember?: boolean };
     const email = (body.email || '').trim().toLowerCase();
     const password = body.password || '';
     if (!email || !password) throw new ApiError(400, 'VALIDATION', 'Email and password are required.');

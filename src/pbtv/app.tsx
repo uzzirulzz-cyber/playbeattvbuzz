@@ -8,6 +8,7 @@ import { Spinner } from './ui';
 import { Home, Pricing, DevicesPage, Faq, Contact, Login, Register } from './views/public';
 import { LiveTV, WatchPage, Movies, MoviePlayer, SeriesList, SeriesPage, EpisodePlayer, Sports } from './views/catalog';
 import { Checkout, AccountShell, AccountDashboard, AccountSubscription, AccountDevices, AccountHistory, AccountFavorites, AccountOrders, AccountInvoices, AccountTickets, AccountProfile, AccountPassword } from './views/account';
+import { AccountIptv } from './views/iptv';
 import { AdminApp } from './views/admin';
 import { Empty } from './ui';
 import { navigate } from './router';
@@ -53,6 +54,7 @@ function Router() {
         devices: ['My Devices', <AccountDevices key="v" />],
         history: ['Watch History', <AccountHistory key="h" />],
         favorites: ['Favorites', <AccountFavorites key="f" />],
+        iptv: ['My IPTV Line', <AccountIptv key="iptv" />],
         orders: ['Orders', <AccountOrders key="o" />],
         invoices: ['Invoices', <AccountInvoices key="i" />],
         tickets: ['Support Tickets', <AccountTickets key="t" />],

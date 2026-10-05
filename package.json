@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "db:push": "prisma db push",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "build:cf": "opennextjs-cloudflare build",
+    "deploy:cf": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "preview:cf": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
@@ -20,7 +23,9 @@
     "jose": "^6.2.12",
     "next": "^16.1.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@neondatabase/serverless": "^1.12.1",
+    "@prisma/adapter-neon": "^6.19.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
@@ -29,6 +34,8 @@
     "@types/react-dom": "^19.0.0",
     "prisma": "^6.19.2",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@opennextjs/cloudflare": "^1.1.0",
+    "wrangler": "^4.0.0"
   }
 }

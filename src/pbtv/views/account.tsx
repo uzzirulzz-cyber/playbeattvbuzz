@@ -216,6 +216,7 @@ export function AccountShell({ active, title, children }: { active: string; titl
     ['devices', 'My Devices', 'bi-tv'],
     ['history', 'Watch History', 'bi-clock-history'],
     ['favorites', 'Favorites', 'bi-heart'],
+    ['iptv', 'My IPTV Line', 'bi-hdmi'],
     ['orders', 'Orders', 'bi-receipt'],
     ['invoices', 'Invoices', 'bi-file-earmark-text'],
     ['tickets', 'Support Tickets', 'bi-life-preserver'],
@@ -565,7 +566,8 @@ export function AccountTickets() {
   useEffect(load, []);
 
   const openThread = async (t: { id: string }) => {
-    setOpen(t);
+    const row = rows.find((r) => r.id === t.id);
+    if (row) setOpen({ id: row.id, number: row.number, subject: row.subject });
     const r = await get<typeof thread>(`/api/support/${t.id}`);
     setThread(r);
   };
