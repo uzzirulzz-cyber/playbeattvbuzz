@@ -31,8 +31,22 @@ export type Channel = {
   gradient: [string, string];
 };
 
-const V = (name: string) =>
-  `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/${name}.mp4`;
+/* All sources verified reachable (HTTP 206 range support) */
+const W3 = 'https://media.w3.org/2010/05';
+const TV = 'https://test-videos.co.uk/vids';
+const MDN = 'https://mdn.github.io/shared-assets/videos';
+
+const VID = {
+  sintelTrailer: `${W3}/sintel/trailer.mp4`, // 52s
+  bunnyMovie: `${W3}/bunny/movie.mp4`, // 9m56s full movie
+  bunnyTrailer: `${W3}/bunny/trailer.mp4`, // 33s
+  shortFilm: `${W3}/video/movie_300.mp4`, // 5m00s
+  bbb10: `${TV}/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_5MB.mp4`, // 10s
+  jelly10: `${TV}/jellyfish/mp4/h264/720/Jellyfish_720_10s_5MB.mp4`, // 10s
+  sintel10: `${TV}/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4`, // 10s
+  flower: `${MDN}/flower.mp4`, // 5s
+  friday: `${MDN}/friday.mp4`, // 6s
+};
 
 export const CHANNELS: Channel[] = [
   {
@@ -90,11 +104,11 @@ export const SHOWS: Show[] = [
     gradient: ['#7c5cff', '#1b1030'],
     episodes: [
       {
-        id: 'sintel-feature',
-        title: "Sintel: Dragon's Call",
-        duration: 888,
-        synopsis: 'The full feature. One warrior, one promise, one dragon.',
-        videoUrl: V('Sintel'),
+        id: 'sintel-trailer',
+        title: 'Official Trailer',
+        duration: 52,
+        synopsis: 'The official trailer — full feature premiering soon on Buzz Originals.',
+        videoUrl: VID.sintelTrailer,
       },
     ],
   },
@@ -107,17 +121,17 @@ export const SHOWS: Show[] = [
     ageRating: '13+',
     genres: ['Sci-Fi', 'Action'],
     synopsis:
-      'Amsterdam, decades from now. A squad of soldiers must rewrite time itself before the machines finish what the future started.',
+      'A city of steel, decades from now. When the machines wake, one crew has five minutes to rewrite the future.',
     badge: 'TOP 10',
     trending: 2,
     gradient: ['#3ddc97', '#0b2b26'],
     episodes: [
       {
-        id: 'steel-feature',
-        title: 'Steel Horizon',
-        duration: 734,
-        synopsis: 'The remastered cult feature, streaming in full.',
-        videoUrl: V('TearsOfSteel'),
+        id: 'steel-short',
+        title: 'Steel Horizon — Full Short',
+        duration: 300,
+        synopsis: 'The complete five-minute short, remastered for Cinema Vault.',
+        videoUrl: VID.shortFilm,
       },
     ],
   },
@@ -130,7 +144,7 @@ export const SHOWS: Show[] = [
     ageRating: '13+',
     genres: ['Automotive', 'Reality'],
     synopsis:
-      'Engines, egos and open roads. The crew chases the loudest machines and the drivers who love them — from rally dirt to city asphalt.',
+      'Engines, egos and open roads. The crew chases the loudest machines and the drivers who love them.',
     badge: 'TOP 10',
     trending: 3,
     gradient: ['#ff2d55', '#3a0d14'],
@@ -140,27 +154,27 @@ export const SHOWS: Show[] = [
         title: 'Ignition',
         season: 1,
         number: 1,
-        duration: 47,
-        synopsis: 'The Bullrun kickoff — a thousand miles of adrenaline start here.',
-        videoUrl: V('WeAreGoingOnBullrun'),
+        duration: 33,
+        synopsis: 'The season teaser — a thousand miles of adrenaline start here.',
+        videoUrl: VID.bunnyTrailer,
       },
       {
         id: 'ft-e2',
-        title: 'Street & Dirt',
+        title: 'Nitro Nights',
         season: 1,
         number: 2,
-        duration: 594,
-        synopsis: 'The Subaru Outback proves it belongs on both asphalt and gravel.',
-        videoUrl: V('SubaruOutbackOnStreetAndDirt'),
+        duration: 10,
+        synopsis: 'Ten seconds of pure nitro under the city lights.',
+        videoUrl: VID.jelly10,
       },
       {
         id: 'ft-e3',
-        title: 'Hot Lap',
+        title: 'Redline',
         season: 1,
         number: 3,
-        duration: 253,
-        synopsis: 'The VW GTI gets pushed to its limit — and then a little further.',
-        videoUrl: V('VolkswagenGTIReview'),
+        duration: 10,
+        synopsis: 'Pushing it past redline — and holding it there.',
+        videoUrl: VID.bbb10,
       },
     ],
   },
@@ -180,48 +194,48 @@ export const SHOWS: Show[] = [
     episodes: [
       {
         id: 'be-e1',
-        title: 'Blazes',
+        title: 'Bloom',
         season: 1,
         number: 1,
-        duration: 15,
-        synopsis: 'Everything is bigger. Especially the fire.',
-        videoUrl: V('ForBiggerBlazes'),
+        duration: 5,
+        synopsis: 'Five seconds. Everything is bigger.',
+        videoUrl: VID.flower,
       },
       {
         id: 'be-e2',
-        title: 'Escapes',
+        title: 'Friday',
         season: 1,
         number: 2,
-        duration: 15,
-        synopsis: 'Out the window, over the roof, gone.',
-        videoUrl: V('ForBiggerEscapes'),
+        duration: 6,
+        synopsis: 'The shortest day of the week feels like this.',
+        videoUrl: VID.friday,
       },
       {
         id: 'be-e3',
-        title: 'Fun',
+        title: 'Fun Size',
         season: 1,
         number: 3,
-        duration: 60,
-        synopsis: 'A full minute of pure, unfiltered fun.',
-        videoUrl: V('ForBiggerFun'),
+        duration: 10,
+        synopsis: 'Ten seconds of pure, unfiltered fun.',
+        videoUrl: VID.bbb10,
       },
       {
         id: 'be-e4',
-        title: 'Joyrides',
+        title: 'Deep End',
         season: 1,
         number: 4,
-        duration: 15,
-        synopsis: 'Buckle up. This ride does not slow down.',
-        videoUrl: V('ForBiggerJoyrides'),
+        duration: 10,
+        synopsis: 'Ten seconds underwater. Hold your breath.',
+        videoUrl: VID.jelly10,
       },
       {
         id: 'be-e5',
-        title: 'Meltdowns',
+        title: 'Dragon Eyes',
         season: 1,
         number: 5,
-        duration: 15,
-        synopsis: 'When everything goes wrong in the best way.',
-        videoUrl: V('ForBiggerMeltdowns'),
+        duration: 10,
+        synopsis: 'A ten-second glimpse of the dragon.',
+        videoUrl: VID.sintel10,
       },
     ],
   },
@@ -241,12 +255,12 @@ export const SHOWS: Show[] = [
     episodes: [
       {
         id: 'bbn-e1',
-        title: 'Payback',
+        title: 'Payback — Full Movie',
         season: 1,
         number: 1,
         duration: 596,
-        synopsis: 'Three bullies, one rabbit, and a very long memory.',
-        videoUrl: V('BigBuckBunny'),
+        synopsis: 'Three bullies, one rabbit, and a very long memory. The full animated movie.',
+        videoUrl: VID.bunnyMovie,
       },
     ],
   },
@@ -268,9 +282,9 @@ export const SHOWS: Show[] = [
         title: 'The Grand Challenge',
         season: 1,
         number: 1,
-        duration: 564,
+        duration: 33,
         synopsis: 'What can a single grand actually buy you? The answer hurts.',
-        videoUrl: V('WhatCarCanYouGetForAGrand'),
+        videoUrl: VID.bunnyTrailer,
       },
     ],
   },
@@ -291,9 +305,9 @@ export const SHOWS: Show[] = [
       {
         id: 'buzz-live-feed',
         title: 'Live Feed',
-        duration: 15,
+        duration: 10,
         synopsis: 'Broadcasting now — the feed loops live, 24/7.',
-        videoUrl: V('ForBiggerBlazes'),
+        videoUrl: VID.jelly10,
       },
     ],
   },
@@ -312,21 +326,21 @@ export const SHOWS: Show[] = [
     episodes: [
       {
         id: 'jc-e1',
-        title: 'Joyrides',
+        title: 'Friday Ride',
         season: 1,
         number: 1,
-        duration: 15,
+        duration: 6,
         synopsis: 'The city is the playground.',
-        videoUrl: V('ForBiggerJoyrides'),
+        videoUrl: VID.friday,
       },
       {
         id: 'jc-e2',
-        title: 'Fun Size',
+        title: 'Bloom Zoom',
         season: 1,
         number: 2,
-        duration: 60,
-        synopsis: 'Sixty seconds of rooftop chaos.',
-        videoUrl: V('ForBiggerFun'),
+        duration: 5,
+        synopsis: 'Five seconds of rooftop chaos.',
+        videoUrl: VID.flower,
       },
     ],
   },
@@ -345,10 +359,10 @@ export const SHOWS: Show[] = [
     episodes: [
       {
         id: 'dw-feature',
-        title: 'Dreamwire',
-        duration: 653,
-        synopsis: 'The surreal animated feature, in full.',
-        videoUrl: V('ElephantsDream'),
+        title: 'Dream Sequence',
+        duration: 52,
+        synopsis: 'A surreal journey in under a minute.',
+        videoUrl: VID.sintelTrailer,
       },
     ],
   },

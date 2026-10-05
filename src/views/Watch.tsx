@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from '../lib/router';
 import Card from '../components/Card';
 import {
@@ -63,10 +63,19 @@ export default function Watch({ id }: { id: string }) {
   const show = getShow(id);
   const [ep, setEp] = useState<Episode | undefined>(show?.episodes[0]);
   const [copied, setCopied] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setEp(show?.episodes[0]);
   }, [show]);
+
+  // attempt autoplay; browsers may block with sound — fall back to poster + controls
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const p = v.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  }, [ep?.id]);
 
   if (!show || !ep) {
     return (
@@ -98,6 +107,7 @@ export default function Watch({ id }: { id: string }) {
       {/* player */}
       <div className="bg-black">
         <video
+          ref={videoRef}
           key={ep.id}
           className="mx-auto w-full max-h-[76vh] aspect-video bg-black"
           src={ep.videoUrl}
