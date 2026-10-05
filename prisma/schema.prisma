@@ -53,10 +53,11 @@ model User {
 // ─── Content: Channels / EPG ────────────────────────────────
 
 model ChannelCategory {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   name      String
-  slug      String @unique
-  sortOrder Int    @default(0)
+  slug      String  @unique
+  sortOrder Int     @default(0)
+  isAdult   Boolean @default(false) // 18+ category — visible only to active All-Access members
 
   channels Channel[]
 }
@@ -249,8 +250,9 @@ model Order {
   discount      Float    @default(0)
   total         Float
   currency      String   @default("USD")
-  paymentMethod String   @default("SANDBOX_CARD") // SANDBOX_CARD | SANDBOX_PAYPAL | SANDBOX_COD
+  paymentMethod String   @default("SANDBOX_CARD") // SANDBOX_CARD | SANDBOX_PAYPAL | SANDBOX_COD | CRYPTO_BTC | ADMIN_GRANT
   status        String   @default("PENDING") // PENDING | PAID | PROCESSING | COMPLETED | FAILED | CANCELLED | REFUNDED
+  txid          String   @default("") // Bitcoin transaction ID submitted by the customer (crypto checkout)
   billing       String   @default("{}") // JSON customer+billing info snapshot
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

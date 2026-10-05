@@ -193,18 +193,21 @@ export function Pricing() {
 
   return (
     <>
-      <SectionTitle eyebrow="Plans & Pricing" title="Premium entertainment, one subscription" />
-      <p className="pb-muted">Prices are loaded live from the platform database and can be changed by the operator at any time.</p>
+      <SectionTitle eyebrow="One membership · Everything included" title="All-Access — $12/month" />
+      <p className="pb-muted">
+        No tiers, no upsells: one membership unlocks <b>every channel, movie, series and the 18+ section</b>.
+        Pay with <i className="bi bi-currency-bitcoin" /> <b>Bitcoin</b> — your subscription is activated right after payment verification.
+      </p>
       {loading && <Spinner />}
       {err && <ErrorState message={err} onRetry={load} />}
       {!loading && !err && (
         <div className="row g-3">
           {plans.map((p) => {
-            const featured = p.name === 'Ultimate';
+            const featured = plans.length === 1 || p.price === Math.max(...plans.map((x) => x.price));
             return (
-              <div className="col-md-6 col-xl-4" key={p.id}>
+              <div className={plans.length === 1 ? 'col-md-8 col-lg-6 mx-auto' : 'col-md-6 col-xl-4'} key={p.id}>
                 <div className={`pb-glass pb-price-card h-100 ${featured ? 'featured' : ''}`}>
-                  {featured && <span className="pb-badge gold position-absolute" style={{ top: 16, right: 16 }}><i className="bi bi-star-fill" /> Most Popular</span>}
+                  {featured && <span className="pb-badge gold position-absolute" style={{ top: 16, right: 16 }}><i className="bi bi-star-fill" /> Everything included</span>}
                   <h5 className="fw-bold mb-1">{p.name}</h5>
                   <div className="pb-muted mb-3" style={{ fontSize: 13.5 }}>{p.description}</div>
                   <div className="pb-price-value">
@@ -214,16 +217,16 @@ export function Pricing() {
                   <div className="d-flex gap-2 my-3 flex-wrap">
                     <span className="pb-badge"><i className="bi bi-tv" /> {p.deviceLimit} device{p.deviceLimit > 1 ? 's' : ''}</span>
                     <span className="pb-badge gold">{p.quality}</span>
-                    {p.trialDays > 0 && <span className="pb-badge green">{p.trialDays}-day trial</span>}
+                    <span className="pb-badge"><i className="bi bi-currency-bitcoin" /> Bitcoin accepted</span>
                   </div>
                   <ul className="pb-feature-list">
                     {(p.features || []).map((f) => (
                       <li key={f}><i className="bi bi-check-circle-fill" /> {f}</li>
                     ))}
-                    <li><i className="bi bi-arrow-repeat" /> {p.autoRenewal ? 'Auto-renews, cancel anytime' : 'No auto-renewal'}</li>
+                    <li><i className="bi bi-shield-check" /> Activated after BTC payment verification</li>
                   </ul>
-                  <button className={`btn w-100 mt-3 ${featured ? 'btn-pb-gold' : 'btn-pb'}`} onClick={() => buy(p.id)}>
-                    {p.price === 0 ? 'Start Free Trial' : 'Buy Now'}
+                  <button className="btn btn-pb-gold w-100 mt-3" onClick={() => buy(p.id)}>
+                    Get All-Access — ${p.price.toFixed(0)}/mo
                   </button>
                 </div>
               </div>
@@ -359,9 +362,44 @@ export function Contact() {
 
 // ─── LOGIN / REGISTER ───────────────────────────────────────
 
+/** Bot verification challenge (stateless signed SVG captcha). */
+export function CaptchaField({ value, onChange, refreshKey }: {
+  value: { token: string; answer: string };
+  onChange: (v: { token: string; answer: string }) => void;
+  refreshKey?: number;
+}) {
+  const [svg, setSvg] = useState('');
+  const load = () => {
+    get<{ svg: string; token: string }>('/api/captcha')
+      .then((r) => { setSvg(r.svg); onChange({ token: r.token, answer: '' }); })
+      .catch(() => null);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [refreshKey]);
+  return (
+    <Field label="Bot verification — enter the code">
+      <div className="d-flex gap-2 align-items-center flex-wrap">
+        <div className="bg-white rounded-3 p-1" style={{ lineHeight: 0, flex: '0 0 auto' }}>
+          {svg
+            ? <img src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`} alt="verification code" width={180} height={60} style={{ display: 'block' }} />
+            : <span className="d-inline-block" style={{ width: 180, height: 60 }}><Spinner /></span>}
+        </div>
+        <button type="button" className="btn btn-pb-ghost btn-sm" onClick={load} title="Get a new code" aria-label="Refresh security code"><i className="bi bi-arrow-clockwise" /></button>
+        <input
+          className="form-control" required maxLength={6} placeholder="6-character code"
+          aria-label="Security code"
+          value={value.answer} onChange={(e) => onChange({ ...value, answer: e.target.value.toUpperCase() })}
+          style={{ textTransform: 'uppercase', letterSpacing: 3, flex: 1, minWidth: 150 }}
+        />
+      </div>
+    </Field>
+  );
+}
+
 export function Login({ params }: { params: Record<string, string> }) {
   const { refreshSession, toast } = useApp();
   const [form, setForm] = useState({ email: '', password: '', remember: true });
+  const [captcha, setCaptcha] = useState({ token: '', answer: '' });
+  const [captchaKey, setCaptchaKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [forgot, setForgot] = useState(false);
@@ -371,12 +409,14 @@ export function Login({ params }: { params: Record<string, string> }) {
     setBusy(true);
     setErr('');
     try {
-      const r = await post<{ redirect: string }>('/api/auth/login', form);
+      const r = await post<{ redirect: string }>('/api/auth/login', { ...form, captchaToken: captcha.token, captchaAnswer: captcha.answer });
       await refreshSession();
       toast('ok', 'Welcome back!');
       navigate(params.next || r.redirect);
     } catch (ex) {
-      setErr((ex as Error).message);
+      const msg = (ex as Error).message;
+      if (/security code|bot verification/i.test(msg)) setCaptchaKey((k) => k + 1);
+      setErr(msg);
     } finally {
       setBusy(false);
     }
@@ -403,7 +443,8 @@ export function Login({ params }: { params: Record<string, string> }) {
                 </label>
                 <button type="button" className="btn btn-link p-0" style={{ fontSize: 13.5 }} onClick={() => setForgot(true)}>Forgot password?</button>
               </div>
-              <button className="btn btn-pb w-100" disabled={busy}>{busy ? 'Signing in…' : 'Sign In'}</button>
+              <CaptchaField value={captcha} onChange={setCaptcha} refreshKey={captchaKey} />
+              <button className="btn btn-pb w-100 mt-3" disabled={busy}>{busy ? 'Signing in…' : 'Sign In'}</button>
             </form>
           ) : (
             <ForgotForm onBack={() => setForgot(false)} />
@@ -453,6 +494,8 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
 export function Register() {
   const { refreshSession, toast } = useApp();
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '', country: '', address: '', city: '', zip: '', terms: false });
+  const [captcha, setCaptcha] = useState({ token: '', answer: '' });
+  const [captchaKey, setCaptchaKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const submit = async (e: React.FormEvent) => {
@@ -460,12 +503,14 @@ export function Register() {
     setBusy(true);
     setErr('');
     try {
-      await post('/api/auth/register', form);
+      await post('/api/auth/register', { ...form, captchaToken: captcha.token, captchaAnswer: captcha.answer });
       await refreshSession();
       toast('ok', 'Account created — welcome!');
       navigate('/pricing');
     } catch (ex) {
-      setErr((ex as Error).message);
+      const msg = (ex as Error).message;
+      if (/security code|bot verification/i.test(msg)) setCaptchaKey((k) => k + 1);
+      setErr(msg);
     } finally {
       setBusy(false);
     }
@@ -490,7 +535,8 @@ export function Register() {
               <input type="checkbox" className="form-check-input m-0 mt-1" checked={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.checked })} />
               <span>I accept the Terms of Service and Privacy Policy, and I understand PLAYBEATTV only distributes authorized streams.</span>
             </label>
-            <button className="btn btn-pb-gold w-100" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
+            <CaptchaField value={captcha} onChange={setCaptcha} refreshKey={captchaKey} />
+            <button className="btn btn-pb-gold w-100 mt-3" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
           </form>
           <hr style={{ borderColor: 'var(--pb-line)' }} className="my-4" />
           <p className="pb-muted mb-0 text-center" style={{ fontSize: 14 }}>

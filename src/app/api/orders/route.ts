@@ -58,6 +58,41 @@ export async function POST(req: Request) {
 
     // ── Payment method validation (sandbox) ──
     const method = body.paymentMethod || 'SANDBOX_CARD';
+
+    // ── Bitcoin (crypto) checkout: create a PENDING order + PENDING payment.
+    //    No subscription is activated here — the operator verifies the on-chain
+    //    payment (customer submits TXID) in Admin → Orders, then the
+    //    subscription is given ("verify & give subscription").
+    if (method === 'CRYPTO_BTC') {
+      const order = await db.order.create({
+        data: {
+          number: orderNumber(), userId: session.id, planId: plan.id, couponId,
+          subtotal: plan.price, discount, total, currency: plan.currency,
+          paymentMethod: 'CRYPTO_BTC', status: 'PENDING',
+          billing: JSON.stringify(body.billing || {}),
+        },
+      });
+      const reference = `BTC-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+      await db.payment.create({
+        data: {
+          orderId: order.id, provider: 'crypto_btc', reference, amount: total, currency: plan.currency,
+          status: 'PENDING', payload: JSON.stringify({ mode: 'crypto', network: 'BTC' }),
+        },
+      });
+      await db.notification.create({
+        data: {
+          userId: session.id, channel: 'INAPP',
+          title: 'Bitcoin payment initiated ₿',
+          body: `Order ${order.number} for ${plan.name} is awaiting your BTC payment. Send exactly $${total.toFixed(2)} worth of BTC to the address on the payment page, then submit your TXID.`,
+        },
+      });
+      await writeAudit(req, session as unknown as SessionUser, 'order.created_crypto', 'order', order.id, { total });
+      return jsonOk({
+        orderId: order.id, number: order.number, status: 'PENDING', paymentMethod: 'CRYPTO_BTC',
+        total, currency: plan.currency, redirect: `/order/${order.number}`,
+      });
+    }
+
     let cardBrand = '';
     let cardLast4 = '';
     let paymentFails = false;

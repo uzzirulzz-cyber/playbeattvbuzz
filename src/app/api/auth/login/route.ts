@@ -3,14 +3,18 @@ import {
   ApiError, checkLockout, clearLoginFails, jsonErr, jsonOk, rateLimit,
   recordLoginFail, signToken, SESSION_COOKIE, verifyPassword, writeAudit,
 } from '@/lib/auth';
+import { verifyCaptcha } from '@/lib/captcha';
 
 export async function POST(req: Request) {
   try {
     rateLimit(req, 'login', 15, 60_000);
-    const body = (await req.json()) as { email?: string; password?: string; remember?: boolean };
+    const body = (await req.json()) as { email?: string; password?: string; remember?: boolean; captchaToken?: string; captchaAnswer?: string };
     const email = (body.email || '').trim().toLowerCase();
     const password = body.password || '';
     if (!email || !password) throw new ApiError(400, 'VALIDATION', 'Email and password are required.');
+
+    // Bot verification (human check) — required on every sign-in
+    verifyCaptcha(String(body.captchaToken || ''), String(body.captchaAnswer || ''));
 
     checkLockout(email);
     const user = await db.user.findUnique({ where: { email }, include: { role: true } });

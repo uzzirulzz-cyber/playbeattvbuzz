@@ -3,6 +3,7 @@ import {
   ApiError, hashPassword, jsonErr, jsonOk, rateLimit, writeAudit,
   signToken, SESSION_COOKIE,
 } from '@/lib/auth';
+import { verifyCaptcha } from '@/lib/captcha';
 
 export async function POST(req: Request) {
   try {
@@ -14,6 +15,9 @@ export async function POST(req: Request) {
     const password = body.password || '';
     const confirm = body.confirmPassword || '';
     const terms = body.terms;
+
+    // Bot verification (human check) — required before any account is created
+    verifyCaptcha(String(body.captchaToken || ''), String(body.captchaAnswer || ''));
 
     if (!name || name.length < 2) throw new ApiError(400, 'VALIDATION', 'Please enter your full name.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError(400, 'VALIDATION', 'Please enter a valid email address.');

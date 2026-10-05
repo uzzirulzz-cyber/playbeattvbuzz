@@ -203,6 +203,17 @@ export async function writeAudit(
 
 // ─── Misc helpers ───────────────────────────────────────────
 
+// ─── Entitlement helpers ────────────────────────────────────
+
+/** True when the user currently holds an ACTIVE, unexpired subscription. */
+export async function hasActiveSubscription(userId: string): Promise<boolean> {
+  const sub = await db.subscription.findFirst({
+    where: { userId, status: 'ACTIVE', expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+  return !!sub;
+}
+
 export function intParam(v: string | null, def: number, min: number, max: number): number {
   const n = parseInt(v || '', 10);
   if (isNaN(n)) return def;

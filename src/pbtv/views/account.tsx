@@ -10,7 +10,6 @@ type Plan = {
   id: string; name: string; price: number; currency: string; billingPeriod: string;
   deviceLimit: number; quality: string; features: string[]; trialDays: number;
 };
-
 // ─── CHECKOUT ───────────────────────────────────────────────
 
 export function Checkout({ params }: { params: Record<string, string> }) {
@@ -18,8 +17,7 @@ export function Checkout({ params }: { params: Record<string, string> }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [coupon, setCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [couponInput, setCouponInput] = useState('');
-  const [method, setMethod] = useState('SANDBOX_CARD');
-  const [card, setCard] = useState({ number: '4242 4242 4242 4242', name: '', exp: '12/29', cvv: '123' });
+  const method = 'CRYPTO_BTC'; // Bitcoin-only checkout (sandbox gateways kept server-side for compatibility)
   const [billing, setBilling] = useState({ name: '', email: '', address: '', city: '', country: '', zip: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -81,15 +79,19 @@ export function Checkout({ params }: { params: Record<string, string> }) {
     setBusy(true);
     setErr('');
     try {
-      const r = await post<{ number: string; status: string; invoice?: string; message?: string; subscription?: { expiresAt: string } }>('/api/orders', {
+      const r = await post<{ number: string; status: string; invoice?: string; message?: string; subscription?: { expiresAt: string }; paymentMethod?: string; redirect?: string }>('/api/orders', {
         planId: plan.id,
         couponCode: coupon?.code,
         paymentMethod: method,
-        card: method === 'SANDBOX_CARD' ? card : undefined,
         billing,
       });
-      setResult(r);
       setCartPlanId(null);
+      if (r.paymentMethod === 'CRYPTO_BTC' && r.redirect) {
+        toast('info', 'Order created — complete your Bitcoin payment.');
+        navigate(r.redirect);
+        return;
+      }
+      setResult(r);
       await refreshSession();
       if (r.status === 'COMPLETED') toast('ok', `Payment confirmed — ${plan.name} is active!`);
       else toast('err', r.message || 'Payment failed');
@@ -167,31 +169,24 @@ export function Checkout({ params }: { params: Record<string, string> }) {
             </div>
             <h6 className="pb-eyebrow mb-3 mt-2">2 · Payment method</h6>
             <div className="d-flex gap-2 mb-3 flex-wrap">
-              {[['SANDBOX_CARD', 'Card', 'bi-credit-card'], ['SANDBOX_PAYPAL', 'PayPal', 'bi-paypal'], ['SANDBOX_COD', 'Manual invoice', 'bi-cash']].map(([v, label, icon]) => (
-                <button key={v} className={`btn btn-sm ${method === v ? 'btn-pb' : 'btn-pb-ghost'}`} onClick={() => setMethod(v)}>
-                  <i className={`bi ${icon} me-1`} />{label}
-                </button>
-              ))}
+              <button className="btn btn-sm btn-pb" type="button">
+                <i className="bi bi-currency-bitcoin me-1" />Bitcoin (BTC) — $12/month
+              </button>
             </div>
-            {method === 'SANDBOX_CARD' && (
-              <>
-                <Field label="Card number" hint="Sandbox: any test card works. Cards ending 0002 simulate a decline. Full numbers are never stored.">
-                  <input className="form-control" inputMode="numeric" value={card.number} onChange={(e) => setCard({ ...card, number: e.target.value })} />
-                </Field>
-                <div className="row">
-                  <div className="col-md-6"><Field label="Cardholder name"><input className="form-control" value={card.name} onChange={(e) => setCard({ ...card, name: e.target.value })} /></Field></div>
-                  <div className="col-4"><Field label="Expiry"><input className="form-control" placeholder="MM/YY" value={card.exp} onChange={(e) => setCard({ ...card, exp: e.target.value })} /></Field></div>
-                  <div className="col-4"><Field label="CVV"><input className="form-control" type="password" value={card.cvv} onChange={(e) => setCard({ ...card, cvv: e.target.value })} /></Field></div>
-                </div>
-              </>
-            )}
-            {method === 'SANDBOX_PAYPAL' && <p className="pb-muted" style={{ fontSize: 13.5 }}>You will be redirected to the provider in a production deployment; sandbox confirms instantly.</p>}
-            {method === 'SANDBOX_COD' && <p className="pb-muted" style={{ fontSize: 13.5 }}>Manual invoice — the operator confirms your payment; subscription activates on confirmation.</p>}
+            <div className="alert alert-info py-3" style={{ background: 'rgba(46,144,250,.08)', borderColor: 'rgba(46,144,250,.3)', color: '#9ecbff' }}>
+              <i className="bi bi-currency-bitcoin me-1" /><b>How Bitcoin checkout works</b>
+              <ol className="mb-0 mt-2" style={{ fontSize: 13.5 }}>
+                <li>Create the order — we show you the operator's BTC address & QR.</li>
+                <li>Send <b>exactly {fmtMoney(total, plan.currency)}</b> worth of BTC (mainnet only).</li>
+                <li>Paste your transaction ID (TXID) on the payment page.</li>
+                <li>After verification your All-Access subscription is activated — everything unlocked, 18+ included.</li>
+              </ol>
+            </div>
             <button className="btn btn-pb-gold w-100 mt-2" onClick={pay} disabled={busy}>
-              <i className="bi bi-shield-lock me-2" />{busy ? 'Processing…' : `Pay ${fmtMoney(total, plan.currency)} securely`}
+              <i className="bi bi-currency-bitcoin me-2" />{busy ? 'Creating order…' : `Continue — pay ${fmtMoney(total, plan.currency)} with BTC`}
             </button>
             <p className="pb-muted text-center mt-2 mb-0" style={{ fontSize: 12 }}>
-              <i className="bi bi-lock-fill me-1" />Processed by the configured gateway with webhook signature verification. No raw card data is ever stored.
+              <i className="bi bi-shield-check me-1" />Crypto payments are verified manually by the operator before the subscription is given. No card data is ever collected.
             </p>
           </div>
         </div>
@@ -204,6 +199,7 @@ export function Checkout({ params }: { params: Record<string, string> }) {
 
 export type Order = {
   id: string; number: string; status: string; total: number; currency: string; createdAt: string;
+  paymentMethod?: string; txid?: string;
   plan: { name: string }; payment?: { status: string; reference: string; cardBrand: string; cardLast4: string } | null;
   invoices: { number: string; status: string }[];
 };
@@ -504,16 +500,25 @@ export function AccountOrders() {
   return (
     <div className="pb-glass table-responsive">
       <table className="pb-table">
-        <thead><tr><th>Order</th><th>Plan</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th></tr></thead>
+        <thead><tr><th>Order</th><th>Plan</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th className="text-end"></th></tr></thead>
         <tbody>
           {rows.map((o) => (
             <tr key={o.id}>
               <td className="fw-semibold">{o.number}</td>
               <td>{o.plan.name}</td>
               <td>{fmtMoney(o.total, o.currency)}</td>
-              <td className="pb-muted">{o.payment ? `${o.payment.cardBrand || o.payment.reference} ${o.payment.cardLast4 ? `••••${o.payment.cardLast4}` : ''}` : '—'}</td>
+              <td className="pb-muted">
+                {o.paymentMethod === 'CRYPTO_BTC'
+                  ? <span className="font-monospace" style={{ fontSize: 11.5 }}>{o.txid ? `TXID ${o.txid.slice(0, 18)}…` : 'BTC — awaiting TXID'}</span>
+                  : o.payment ? `${o.payment.cardBrand || o.payment.reference} ${o.payment.cardLast4 ? `••••${o.payment.cardLast4}` : ''}` : '—'}
+              </td>
               <td><StatusBadge status={o.status} /></td>
               <td className="pb-muted">{fmtDate(o.createdAt)}</td>
+              <td className="text-end">
+                {o.paymentMethod === 'CRYPTO_BTC' && o.status === 'PENDING' && (
+                  <Link to={`/order/${o.number}`} className="btn btn-pb-gold btn-sm"><i className="bi bi-currency-bitcoin me-1" />Complete BTC payment</Link>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

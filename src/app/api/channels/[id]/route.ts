@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { jsonErr, jsonOk } from '@/lib/auth';
+import { getSessionUser, hasActiveSubscription, jsonErr, jsonOk } from '@/lib/auth';
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -12,6 +12,16 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       return new Response(JSON.stringify({ ok: false, error: { code: 'NOT_FOUND', message: 'Channel not found.' } }), {
         status: 404, headers: { 'Content-Type': 'application/json' },
       });
+    }
+    // 18+ channels are hidden from non-members (active All-Access subscription required)
+    if (ch.category.isAdult) {
+      const session = await getSessionUser(req);
+      const unlocked = session ? await hasActiveSubscription(session.id) : false;
+      if (!unlocked) {
+        return new Response(JSON.stringify({ ok: false, error: { code: 'ADULT_LOCKED', message: 'This channel is available to All-Access members only.' } }), {
+          status: 403, headers: { 'Content-Type': 'application/json' },
+        });
+      }
     }
     const now = new Date();
     const [current, next, schedule] = await Promise.all([

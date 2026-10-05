@@ -8,10 +8,11 @@ import { Spinner } from './ui';
 import { Home, Pricing, DevicesPage, Faq, Contact, Login, Register } from './views/public';
 import { LiveTV, WatchPage, Movies, MoviePlayer, SeriesList, SeriesPage, EpisodePlayer, Sports } from './views/catalog';
 import { Checkout, AccountShell, AccountDashboard, AccountSubscription, AccountDevices, AccountHistory, AccountFavorites, AccountOrders, AccountInvoices, AccountTickets, AccountProfile, AccountPassword } from './views/account';
+import { BtcOrderPage } from './views/orderbtc';
 import { AccountIptv } from './views/iptv';
 import { AdminApp } from './views/admin';
 import { Empty } from './ui';
-import { navigate } from './router';
+import { Link, navigate } from './router';
 
 function Router() {
   const { path, params } = useHashRoute();
@@ -106,8 +107,13 @@ function Router() {
       case '/checkout':
         view = <Checkout params={params} />;
         break;
+      case '/order':
+      case '/order/':
+        view = <Empty icon="bi-receipt" text="No order specified."><Link to="/pricing" className="btn btn-pb btn-sm mt-2">View plans</Link></Empty>;
+        break;
       default:
-        if (path.startsWith('/watch/')) view = <WatchPage id={decodeURIComponent(path.slice(7))} />;
+        if (path.startsWith('/order/')) view = <BtcOrderPage number={decodeURIComponent(path.slice(7))} />;
+        else if (path.startsWith('/watch/')) view = <WatchPage id={decodeURIComponent(path.slice(7))} />;
         else if (path.startsWith('/play/movie/')) view = <MoviePlayer id={decodeURIComponent(path.slice(12))} />;
         else if (path.startsWith('/play/episode/')) view = <EpisodePlayer id={decodeURIComponent(path.slice(14))} />;
         else if (path.startsWith('/series/')) view = <SeriesPage id={decodeURIComponent(path.slice(8))} />;

@@ -389,6 +389,21 @@ export function AdminOrders() {
     }
   };
 
+  const cryptoAction = async (id: string, action: 'verify_crypto' | 'reject_crypto') => {
+    try {
+      if (action === 'verify_crypto') {
+        await patch(`/api/admin/orders/${id}`, { action });
+        toast('ok', 'Payment verified — subscription given ✅');
+      } else {
+        await patch(`/api/admin/orders/${id}`, { action });
+        toast('ok', 'Payment rejected — customer notified');
+      }
+      load();
+    } catch (e) {
+      toast('err', (e as Error).message);
+    }
+  };
+
   return (
     <>
       <div className="pb-glass p-3 mb-3 d-flex gap-2 flex-wrap">
@@ -403,23 +418,40 @@ export function AdminOrders() {
       {loading && <Spinner />}
       <div className="pb-glass table-responsive">
         <table className="pb-table">
-          <thead><tr><th>Order</th><th>Customer</th><th>Plan</th><th>Amount</th><th>Payment</th><th>Status</th><th>Created</th><th className="text-end">Actions</th></tr></thead>
+          <thead><tr><th>Order</th><th>Customer</th><th>Plan</th><th>Amount</th><th>Payment / TXID</th><th>Status</th><th>Created</th><th className="text-end">Actions</th></tr></thead>
           <tbody>
             {rows.map((o) => {
               const payment = o.payment as { reference?: string; cardBrand?: string; cardLast4?: string } | null;
+              const isCrypto = o.paymentMethod === 'CRYPTO_BTC';
+              const txid = String(o.txid || '');
               return (
                 <tr key={String(o.id)}>
                   <td className="fw-semibold">{String(o.number)}</td>
                   <td>{(o.user as { name: string }).name}<div className="pb-muted" style={{ fontSize: 11.5 }}>{(o.user as { email: string }).email}</div></td>
                   <td>{(o.plan as { name: string }).name}</td>
                   <td>{fmtMoney(Number(o.total), String(o.currency))}</td>
-                  <td className="pb-muted" style={{ fontSize: 12 }}>{payment?.cardBrand ? `${payment.cardBrand} ••••${payment.cardLast4}` : payment?.reference || '—'}</td>
+                  <td className="pb-muted" style={{ fontSize: 12 }}>
+                    {isCrypto
+                      ? <span className="font-monospace" title={txid || payment?.reference}>{txid ? `${txid.slice(0, 20)}…` : (payment?.reference || 'awaiting TXID')}</span>
+                      : payment?.cardBrand ? `${payment.cardBrand} ••••${payment.cardLast4}` : payment?.reference || '—'}
+                  </td>
                   <td>{statusRender(o.status)}</td>
                   <td className="pb-muted">{fmtDateTime(String(o.createdAt))}</td>
                   <td className="text-end">
-                    <select className="form-select form-select-sm" style={{ minWidth: 130 }} value={String(o.status)} onChange={(e) => setStatusFor(String(o.id), e.target.value)}>
-                      {['PENDING', 'PAID', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED'].map((s) => <option key={s}>{s}</option>)}
-                    </select>
+                    {isCrypto && o.status === 'PENDING' ? (
+                      <div className="d-flex gap-1 justify-content-end">
+                        <button className="btn btn-pb-gold btn-sm text-nowrap" onClick={() => cryptoAction(String(o.id), 'verify_crypto')} title="Confirm the BTC payment and give the subscription">
+                          <i className="bi bi-check2-circle me-1" />Verify &amp; give sub
+                        </button>
+                        <button className="btn btn-pb-danger btn-sm" onClick={() => cryptoAction(String(o.id), 'reject_crypto')} title="Reject the submitted TXID">
+                          <i className="bi bi-x-lg" />
+                        </button>
+                      </div>
+                    ) : (
+                      <select className="form-select form-select-sm" style={{ minWidth: 130 }} value={String(o.status)} onChange={(e) => setStatusFor(String(o.id), e.target.value)}>
+                        {['PENDING', 'PAID', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED'].map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                    )}
                   </td>
                 </tr>
               );
@@ -595,6 +627,9 @@ export function AdminCustomers() {
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [grantMonths, setGrantMonths] = useState(1);
+  const [grantNote, setGrantNote] = useState('');
+  const [grantBusy, setGrantBusy] = useState(false);
   const { toast } = useApp();
   const size = 20;
 
@@ -614,6 +649,24 @@ export function AdminCustomers() {
       load();
     } catch (e) {
       toast('err', (e as Error).message);
+    }
+  };
+
+  const grantSubscription = async () => {
+    const id = String((detail?.user as { id?: string })?.id || '');
+    if (!id) return;
+    setGrantBusy(true);
+    try {
+      const r = await patch<{ expiresAt: string }>(`/api/admin/customers/${id}`, { action: 'grant_subscription', months: grantMonths, note: grantNote });
+      toast('ok', `Subscription given — active until ${new Date(r.expiresAt).toDateString()}`);
+      setGrantNote('');
+      setGrantMonths(1);
+      get(`/api/admin/customers/${id}`).then(setDetail).catch(() => null);
+      load();
+    } catch (e) {
+      toast('err', (e as Error).message);
+    } finally {
+      setGrantBusy(false);
     }
   };
 
@@ -672,6 +725,23 @@ export function AdminCustomers() {
                   <span>{s.plan.name}</span><StatusBadge status={s.status} />
                 </div>
               ))}
+              <div className="pb-glass p-3 mt-2">
+                <div className="pb-eyebrow mb-2">Give subscription</div>
+                <div className="d-flex gap-2 align-items-end">
+                  <div style={{ width: 90 }}>
+                    <Field label="Months">
+                      <input type="number" min={1} max={36} className="form-control form-control-sm" value={grantMonths} onChange={(e) => setGrantMonths(Math.max(1, Math.min(36, Number(e.target.value) || 1)))} />
+                    </Field>
+                  </div>
+                  <button className="btn btn-pb-gold btn-sm mb-1" onClick={grantSubscription} disabled={grantBusy}>
+                    <i className="bi bi-gift me-1" />{grantBusy ? 'Granting…' : 'Grant'}
+                  </button>
+                </div>
+                <Field label="Note (internal, optional)">
+                  <input className="form-control form-control-sm" placeholder="e.g. reseller sale, comp, good-will" value={grantNote} onChange={(e) => setGrantNote(e.target.value)} />
+                </Field>
+                <div className="pb-muted" style={{ fontSize: 11.5 }}>Creates a completed admin-grant order + active subscription + notification. Audited.</div>
+              </div>
               <div className="pb-eyebrow mb-2 mt-3">Devices</div>
               {(detail.devices as { id: string; name: string; status: string }[]).map((d) => (
                 <div key={d.id} className="d-flex justify-content-between py-1" style={{ fontSize: 13 }}>
