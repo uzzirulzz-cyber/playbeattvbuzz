@@ -1,6 +1,24 @@
 import { db } from '@/lib/db';
 import { ApiError, getSessionUser } from '@/lib/auth';
 import { getEntitlement, registerPlaybackDevice, type Entitlement } from '@/lib/adminCrud';
+import { sig } from '@/lib/streamSign';
+
+/**
+ * Build a signed, credential-free proxy URL for items sourced from the owner's
+ * Xtream distribution line (internal `xtream://` scheme). The browser only ever
+ * sees /api/stream/* — the provider host/user/pass stay in server env vars.
+ */
+function proxied(kind: 'live' | 'vod' | 'ep', id: string, uid: string, ext = 'm3u8') {
+  const exp = Math.floor(Date.now() / 1000) + 6 * 3600;
+  const k = sig(`${kind}|${id}|${uid}|${exp}`);
+  return { url: `/api/stream/${kind}/${id}.${ext}?e=${exp}&k=${k}`, type: kind === 'live' ? 'HLS' : 'MP4' };
+}
+
+/** Parse internal `xtream://<kind>/<id>[/<ext>]` references. */
+function parseXtream(ref: string): { kind: string; id: string; ext: string } | null {
+  const m = ref.match(/^xtream:\/\/(live|vod|ep)\/([A-Za-z0-9_-]+)(?:\/([a-z0-9]+))?$/i);
+  return m ? { kind: m[1].toLowerCase(), id: m[2], ext: m[3] || '' } : null;
+}
 
 /**
  * Playback gate: returns the authorized stream reference ONLY to entitled viewers.
@@ -33,8 +51,15 @@ export async function resolvePlayback(
         throw new ApiError(402, 'SUBSCRIPTION_REQUIRED', 'An active subscription is required to watch this channel.');
       }
     }
-    streamUrl = ch.streamUrl;
-    streamType = ch.streamType;
+    const xref = parseXtream(ch.streamUrl);
+    if (xref && xref.kind === 'live') {
+      const p = proxied('live', xref.id, session.id, 'm3u8');
+      streamUrl = p.url;
+      streamType = p.type;
+    } else {
+      streamUrl = ch.streamUrl;
+      streamType = ch.streamType;
+    }
     label = ch.name;
     historyRef = { channelId: ch.id, refType: 'CHANNEL', refId: ch.id };
   } else if (kind === 'movie') {
@@ -42,8 +67,15 @@ export async function resolvePlayback(
     if (!mv) throw new ApiError(404, 'NOT_FOUND', 'Movie not found.');
     ent = await getEntitlement(session.id);
     if (!ent.hasActive) throw new ApiError(402, 'SUBSCRIPTION_REQUIRED', 'An active subscription is required to watch movies.');
-    streamUrl = mv.playbackUrl;
-    streamType = 'HLS';
+    const mref = parseXtream(mv.playbackUrl);
+    if (mref && mref.kind === 'vod') {
+      const p = proxied('vod', mref.id, session.id, mref.ext || 'mp4');
+      streamUrl = p.url;
+      streamType = p.type;
+    } else {
+      streamUrl = mv.playbackUrl;
+      streamType = 'HLS';
+    }
     label = mv.title;
     historyRef = { refType: 'MOVIE', refId: mv.id };
   } else {
@@ -51,8 +83,15 @@ export async function resolvePlayback(
     if (!ep) throw new ApiError(404, 'NOT_FOUND', 'Episode not found.');
     ent = await getEntitlement(session.id);
     if (!ent.hasActive) throw new ApiError(402, 'SUBSCRIPTION_REQUIRED', 'An active subscription is required to watch series.');
-    streamUrl = ep.playbackUrl;
-    streamType = 'HLS';
+    const eref = parseXtream(ep.playbackUrl);
+    if (eref && eref.kind === 'ep') {
+      const p = proxied('ep', eref.id, session.id, eref.ext || 'mp4');
+      streamUrl = p.url;
+      streamType = p.type;
+    } else {
+      streamUrl = ep.playbackUrl;
+      streamType = 'HLS';
+    }
     label = `${ep.season.series.title} — S${ep.season.number}:E${ep.number}`;
     historyRef = { refType: 'EPISODE', refId: ep.id };
   }

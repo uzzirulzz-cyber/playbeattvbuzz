@@ -1490,7 +1490,7 @@ export const channelsCfg: ResourceConfig = {
     { name: 'language', label: 'Language' },
     { name: 'quality', label: 'Quality', render: (row) => <Badge kind={row.quality === '4K' ? 'gold' : ''}>{String(row.quality)}</Badge> },
     { name: 'isFree', label: 'Free', render: (row) => (row.isFree ? <Badge kind="green">Free</Badge> : <Badge kind="gray">Sub only</Badge>) },
-    { name: 'status', label: 'Status', render: statusRender },
+    { name: 'status', label: 'Status', render: (row: Record<string, unknown>) => statusRender(row.status) },
   ],
   fields: [
     { name: 'name', label: 'Channel name', required: true },
@@ -1534,7 +1534,7 @@ export const moviesCfg: ResourceConfig = {
     { name: 'genres', label: 'Genres' },
     { name: 'quality', label: 'Quality', render: (row) => <Badge kind={row.quality === '4K' ? 'gold' : ''}>{String(row.quality)}</Badge> },
     { name: 'durationMin', label: 'Minutes' },
-    { name: 'status', label: 'Status', render: statusRender },
+    { name: 'status', label: 'Status', render: (row: Record<string, unknown>) => statusRender(row.status) },
   ],
   fields: [
     { name: 'title', label: 'Title', required: true },
@@ -1561,7 +1561,7 @@ export const sportsCfg: ResourceConfig = {
     { name: 'title', label: 'Event', render: (row) => <span className="fw-semibold">{String(row.title)}</span> },
     { name: 'category', label: 'Category' },
     { name: 'startsAt', label: 'Starts', render: (row) => fmtDateTime(String(row.startsAt)) },
-    { name: 'status', label: 'Status', render: statusRender },
+    { name: 'status', label: 'Status', render: (row: Record<string, unknown>) => statusRender(row.status) },
   ],
   fields: [
     { name: 'title', label: 'Event title', required: true, span: 12 },
@@ -1580,11 +1580,11 @@ export const plansCfg: ResourceConfig = {
   endpoint: '/api/admin/plans',
   columns: [
     { name: 'name', label: 'Plan', render: (row) => <span className="fw-semibold">{String(row.name)}</span> },
-    { name: 'price', label: 'Price', render: moneyRender('USD') },
+    { name: 'price', label: 'Price', render: (row: Record<string, unknown>) => moneyRender('USD')(row.price) },
     { name: 'billingPeriod', label: 'Billing' },
     { name: 'deviceLimit', label: 'Devices' },
     { name: 'quality', label: 'Quality', render: (row) => <Badge kind={row.quality === '4K' ? 'gold' : ''}>{String(row.quality)}</Badge> },
-    { name: 'status', label: 'Status', render: statusRender },
+    { name: 'status', label: 'Status', render: (row: Record<string, unknown>) => statusRender(row.status) },
   ],
   fields: [
     { name: 'name', label: 'Plan name', required: true },
@@ -1611,7 +1611,7 @@ export const couponsCfg: ResourceConfig = {
     { name: 'usedCount', label: 'Used' },
     { name: 'maxUses', label: 'Max uses' },
     { name: 'expiresAt', label: 'Expires', render: (row) => (row.expiresAt ? fmtDate(String(row.expiresAt)) : 'Never') },
-    { name: 'status', label: 'Status', render: statusRender },
+    { name: 'status', label: 'Status', render: (row: Record<string, unknown>) => statusRender(row.status) },
   ],
   fields: [
     { name: 'code', label: 'Code', required: true },
@@ -1633,7 +1633,7 @@ export const providersCfg: ResourceConfig = {
   columns: [
     { name: 'name', label: 'Provider', render: (row) => <span className="fw-semibold">{String(row.name)}</span> },
     { name: 'type', label: 'Type' },
-    { name: 'status', label: 'Status', render: statusRender },
+    { name: 'status', label: 'Status', render: (row: Record<string, unknown>) => statusRender(row.status) },
     { name: 'notes', label: 'Notes' },
   ],
   fields: [
@@ -1653,7 +1653,7 @@ export const sourcesCfg: ResourceConfig = {
     { name: 'protocol', label: 'Protocol' },
     { name: 'baseUrl', label: 'Base URL' },
     { name: 'credentialsRef', label: 'Credentials ref', render: (row) => <span className="font-monospace" style={{ fontSize: 12 }}>{String(row.credentialsRef || '—')}</span> },
-    { name: 'status', label: 'Status', render: statusRender },
+    { name: 'status', label: 'Status', render: (row: Record<string, unknown>) => statusRender(row.status) },
   ],
   fields: [
     { name: 'label', label: 'Label', required: true },
