@@ -1,0 +1,452 @@
+// PLAYBEATTV — IPTV Subscription Platform
+// Normalized schema (Prisma / SQLite sandbox; portable to PostgreSQL by swapping provider + DATABASE_URL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Identity & RBAC ────────────────────────────────────────
+
+model Role {
+  id          String @id @default(cuid())
+  name        String @unique // SUPERADMIN | ADMIN | STAFF | CUSTOMER
+  permissions String @default("[]") // JSON array of permission strings
+
+  users User[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  phone        String    @default("")
+  role         Role      @relation(fields: [roleId], references: [id])
+  roleId       String
+  status       String    @default("ACTIVE") // ACTIVE | SUSPENDED
+  tokenVersion Int       @default(0) // bump to revoke all sessions
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  twoFactor    Boolean   @default(false)
+  lastLoginAt  DateTime?
+  billing      String    @default("{}") // JSON: address, city, country, zip
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  subscriptions Subscription[]
+  orders        Order[]
+  devices       Device[]
+  favorites     Favorite[]
+  history       WatchHistory[]
+  tickets       SupportTicket[]
+  ticketMsgs    TicketMessage[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+}
+
+// ─── Content: Channels / EPG ────────────────────────────────
+
+model ChannelCategory {
+  id        String @id @default(cuid())
+  name      String
+  slug      String @unique
+  sortOrder Int    @default(0)
+
+  channels Channel[]
+}
+
+model Channel {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String   @default("")
+  logoSeed    String   @default("") // deterministic gradient logo art (no copyrighted assets)
+  categoryId  String
+  category    ChannelCategory @relation(fields: [categoryId], references: [id])
+  country     String   @default("International")
+  language    String   @default("English")
+  quality     String   @default("HD") // SD | HD | 4K
+  epgId       String   @default("")
+  streamType  String   @default("HLS") // HLS | DASH | MP4
+  // Stream URL is SECRET: never returned by catalog APIs — only by /api/play/* after entitlement check
+  streamUrl   String   @default("")
+  isFree      Boolean  @default(false) // free channels play without a subscription
+  status      String   @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  epgPrograms EpgProgram[]
+  history     WatchHistory[]
+  sportsEvents SportsEvent[]
+
+  @@index([categoryId])
+  @@index([status, quality])
+}
+
+model EpgProgram {
+  id          String   @id @default(cuid())
+  channelId   String
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  epgId       String   @default("")
+  title       String
+  description String   @default("")
+  startsAt    DateTime
+  endsAt      DateTime
+
+  @@index([channelId, startsAt])
+}
+
+model EpgSyncLog {
+  id               String   @id @default(cuid())
+  source           String
+  status           String   @default("OK") // OK | ERROR
+  message          String   @default("")
+  programsImported Int      @default(0)
+  channelsMapped   Int      @default(0)
+  createdAt        DateTime @default(now())
+}
+
+// ─── Content: VOD / Sports ──────────────────────────────────
+
+model Movie {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  description String   @default("")
+  posterSeed  String   @default("")
+  genres      String   @default("") // csv
+  language    String   @default("English")
+  year        Int      @default(2025)
+  durationMin Int      @default(90)
+  quality     String   @default("HD") // HD | 4K
+  rating      String   @default("13+")
+  trailerUrl  String   @default("")
+  playbackUrl String   @default("") // demo/authorized source; served only via /api/play/movie/:id
+  featured    Boolean  @default(false)
+  trending    Int      @default(50)
+  status      String   @default("PUBLISHED") // PUBLISHED | DRAFT
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, trending])
+}
+
+model Series {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  description String   @default("")
+  posterSeed  String   @default("")
+  genres      String   @default("")
+  language    String   @default("English")
+  year        Int      @default(2025)
+  quality     String   @default("HD")
+  featured    Boolean  @default(false)
+  trending    Int      @default(50)
+  status      String   @default("PUBLISHED")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  seasons Season[]
+}
+
+model Season {
+  id       String @id @default(cuid())
+  seriesId String
+  series   Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  number   Int
+  title    String @default("")
+
+  episodes Episode[]
+
+  @@unique([seriesId, number])
+}
+
+model Episode {
+  id          String  @id @default(cuid())
+  seasonId    String
+  season      Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  number      Int
+  title       String
+  description String  @default("")
+  durationMin Int     @default(25)
+  playbackUrl String  @default("")
+
+  @@index([seasonId])
+}
+
+model SportsEvent {
+  id        String   @id @default(cuid())
+  title     String
+  category  String // Football | Cricket | Tennis | Basketball | Motorsports | Combat | Other
+  homeTeam  String   @default("")
+  awayTeam  String   @default("")
+  startsAt  DateTime
+  status    String   @default("UPCOMING") // LIVE | UPCOMING | FINISHED
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([status, startsAt])
+}
+
+// ─── Commerce ───────────────────────────────────────────────
+
+model Plan {
+  id            String  @id @default(cuid())
+  name          String
+  slug          String  @unique
+  description   String  @default("")
+  price         Float
+  currency      String  @default("USD")
+  billingPeriod String  @default("MONTHLY") // MONTHLY | QUARTERLY | YEARLY
+  deviceLimit   Int     @default(1)
+  quality       String  @default("HD") // HD | FULL HD | 4K
+  features      String  @default("[]") // JSON string[]
+  trialDays     Int     @default(0)
+  autoRenewal   Boolean @default(true)
+  status        String  @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt     DateTime @default(now())
+
+  subscriptions Subscription[]
+  orders        Order[]
+  coupons       Coupon[]
+}
+
+model Coupon {
+  id               String    @id @default(cuid())
+  code             String    @unique
+  type             String // PERCENT | FIXED
+  value            Float
+  maxUses          Int       @default(0) // 0 = unlimited
+  perCustomerLimit Int       @default(1)
+  minAmount        Float     @default(0)
+  planId           String?
+  plan             Plan?     @relation(fields: [planId], references: [id])
+  expiresAt        DateTime?
+  usedCount        Int       @default(0)
+  status           String    @default("ACTIVE")
+
+  orders Order[]
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  number        String   @unique // PB-20260101-0001
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  planId        String
+  plan          Plan     @relation(fields: [planId], references: [id])
+  couponId      String?
+  coupon        Coupon?  @relation(fields: [couponId], references: [id])
+  subtotal      Float
+  discount      Float    @default(0)
+  total         Float
+  currency      String   @default("USD")
+  paymentMethod String   @default("SANDBOX_CARD") // SANDBOX_CARD | SANDBOX_PAYPAL | SANDBOX_COD
+  status        String   @default("PENDING") // PENDING | PAID | PROCESSING | COMPLETED | FAILED | CANCELLED | REFUNDED
+  billing       String   @default("{}") // JSON customer+billing info snapshot
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  payment      Payment?
+  subscription Subscription?
+  invoices     Invoice[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id])
+  provider   String   @default("sandbox")
+  reference  String   @unique
+  amount     Float
+  currency   String   @default("USD")
+  status     String   @default("PENDING") // PENDING | PAID | FAILED | REFUNDED
+  cardBrand  String   @default("")
+  cardLast4  String   @default("") // NEVER store full numbers
+  failureMsg String   @default("")
+  payload    String   @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Invoice {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  number    String   @unique
+  amount    Float
+  currency  String   @default("USD")
+  status    String   @default("PAID") // PAID | OPEN | VOID
+  issuedAt  DateTime @default(now())
+}
+
+model Subscription {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  planId       String
+  plan         Plan      @relation(fields: [planId], references: [id])
+  orderId      String?   @unique
+  order        Order?    @relation(fields: [orderId], references: [id])
+  status       String    @default("PENDING") // ACTIVE | PENDING | EXPIRED | CANCELLED | SUSPENDED
+  startsAt     DateTime  @default(now())
+  expiresAt    DateTime
+  autoRenew    Boolean   @default(true)
+  devicesLimit Int       @default(1)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId, status])
+}
+
+model Device {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  name         String
+  platform     String    @default("Web") // Android TV | Smart TV | Android Phone | iPhone | Windows | macOS | Fire TV | Web
+  lastIp       String    @default("")
+  lastActiveAt DateTime  @default(now())
+  status       String    @default("ACTIVE") // ACTIVE | REVOKED
+  createdAt    DateTime  @default(now())
+}
+
+// ─── Engagement ─────────────────────────────────────────────
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  refType   String // CHANNEL | MOVIE | SERIES
+  refId     String
+  label     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([userId, refType, refId])
+}
+
+model WatchHistory {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  channelId      String?
+  channel        Channel? @relation(fields: [channelId], references: [id])
+  refType        String // CHANNEL | MOVIE | EPISODE
+  refId          String
+  label          String   @default("")
+  secondsWatched Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, refType, refId])
+}
+
+model SupportTicket {
+  id         String   @id @default(cuid())
+  number     String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  subject    String
+  category   String   @default("General")
+  priority   String   @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  status     String   @default("OPEN") // OPEN | PENDING | IN_PROGRESS | RESOLVED | CLOSED
+  assigneeId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  messages TicketMessage[]
+}
+
+model TicketMessage {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  authorRole String   @default("CUSTOMER")
+  body       String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id])
+  channel   String    @default("INAPP") // INAPP | EMAIL
+  title     String
+  body      String    @default("")
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  subject   String
+  bodyHtml  String
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Ops: providers / sources / settings / audit ────────────
+
+model ContentProvider {
+  id     String @id @default(cuid())
+  name   String
+  type   String @default("IPTV") // IPTV | EPG | VOD
+  status String @default("ACTIVE")
+  notes  String @default("")
+
+  sources StreamingSource[]
+}
+
+model StreamingSource {
+  id             String @id @default(cuid())
+  providerId     String?
+  provider       ContentProvider? @relation(fields: [providerId], references: [id])
+  label          String
+  protocol       String @default("HLS") // HLS | DASH | RTMP
+  baseUrl        String @default("")
+  credentialsRef String @default("") // ENV VAR NAME only — never the secret itself
+  status         String @default("ACTIVE")
+}
+
+model ApiIntegration {
+  id        String   @id @default(cuid())
+  name      String
+  kind      String   @default("PAYMENT") // PAYMENT | EPG | WEBHOOK | OTHER
+  config    String   @default("{}") // secrets masked as ****** on read
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  key       String   @id
+  value     String   @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  actorEmail String   @default("system")
+  action     String // e.g. plan.create, channel.update, user.suspend
+  entity     String   @default("")
+  entityId   String   @default("")
+  meta       String   @default("{}")
+  ip         String   @default("")
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity])
+}

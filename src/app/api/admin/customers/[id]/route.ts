@@ -1,0 +1,61 @@
+import crypto from 'crypto';
+import { db } from '@/lib/db';
+import { ApiError, jsonErr, jsonOk, requireAdmin, writeAudit, hashPassword } from '@/lib/auth';
+
+/** Customer 360 detail */
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    await requireAdmin(req);
+    const { id } = await ctx.params;
+    const u = await db.user.findUnique({
+      where: { id },
+      select: {
+        id: true, email: true, name: true, phone: true, status: true, createdAt: true, lastLoginAt: true, billing: true, twoFactor: true,
+        subscriptions: { include: { plan: true, order: true }, orderBy: { createdAt: 'desc' } },
+        orders: { include: { plan: { select: { name: true } }, payment: { select: { status: true, reference: true, amount: true } }, invoices: true }, orderBy: { createdAt: 'desc' } },
+        devices: { orderBy: { lastActiveAt: 'desc' } },
+        tickets: { include: { messages: { take: 1, orderBy: { createdAt: 'desc' } } }, orderBy: { updatedAt: 'desc' } },
+        history: { orderBy: { updatedAt: 'desc' }, take: 10 },
+        favorites: true,
+      },
+    });
+    if (!u) throw new ApiError(404, 'NOT_FOUND', 'Customer not found.');
+    return jsonOk({ customer: u });
+  } catch (e) {
+    return jsonErr(e);
+  }
+}
+
+/** suspend | activate | reset-password (returns one-time temp password) */
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const actor = await requireAdmin(req);
+    const { id } = await ctx.params;
+    const body = (await req.json()) as { action?: string; status?: string };
+    const user = await db.user.findUnique({ where: { id } });
+    if (!user) throw new ApiError(404, 'NOT_FOUND', 'Customer not found.');
+
+    if (body.action === 'suspend' || body.status === 'SUSPENDED') {
+      await db.user.update({ where: { id }, data: { status: 'SUSPENDED', tokenVersion: { increment: 1 } } });
+      await db.subscription.updateMany({ where: { userId: id, status: 'ACTIVE' }, data: { status: 'SUSPENDED' } });
+      await writeAudit(req, actor, 'customer.suspend', 'user', id, { email: user.email });
+      return jsonOk({ status: 'SUSPENDED' });
+    }
+    if (body.action === 'activate' || body.status === 'ACTIVE') {
+      await db.user.update({ where: { id }, data: { status: 'ACTIVE' } });
+      await db.subscription.updateMany({ where: { userId: id, status: 'SUSPENDED' }, data: { status: 'ACTIVE' } });
+      await writeAudit(req, actor, 'customer.activate', 'user', id, { email: user.email });
+      return jsonOk({ status: 'ACTIVE' });
+    }
+    if (body.action === 'reset-password') {
+      const temp = `PB-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+      await db.user.update({ where: { id }, data: { passwordHash: hashPassword(temp), tokenVersion: { increment: 1 } } });
+      await writeAudit(req, actor, 'customer.reset_password', 'user', id, { email: user.email });
+      // one-time display only; NOT stored in plaintext
+      return jsonOk({ tempPassword: temp, message: 'Share this one-time password with the customer securely. It is not stored.' });
+    }
+    throw new ApiError(400, 'VALIDATION', 'Unknown action.');
+  } catch (e) {
+    return jsonErr(e);
+  }
+}

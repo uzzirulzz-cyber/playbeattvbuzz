@@ -1,0 +1,51 @@
+import { db } from '@/lib/db';
+import { jsonErr, jsonOk, requireAdmin } from '@/lib/auth';
+
+export async function GET(req: Request) {
+  try {
+    await requireAdmin(req);
+    const url = new URL(req.url);
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const size = Math.min(100, Math.max(1, parseInt(url.searchParams.get('size') || '20', 10) || 20));
+    const q = (url.searchParams.get('q') || '').trim();
+    const status = url.searchParams.get('status') || '';
+
+    const where: Record<string, unknown> = { role: { name: 'CUSTOMER' } };
+    if (status) where.status = status;
+    if (q) where.OR = [{ name: { contains: q } }, { email: { contains: q } }, { phone: { contains: q } }];
+
+    const [rows, total] = await Promise.all([
+      db.user.findMany({
+        where,
+        select: {
+          id: true, email: true, name: true, phone: true, status: true, createdAt: true, lastLoginAt: true, billing: true,
+          subscriptions: { where: { status: 'ACTIVE' }, include: { plan: { select: { name: true } } }, take: 1 },
+          orders: { select: { total: true, status: true } },
+          devices: { where: { status: 'ACTIVE' }, select: { id: true } },
+          tickets: { select: { id: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * size,
+        take: size,
+      }),
+      db.user.count({ where }),
+    ]);
+
+    return jsonOk({
+      rows: rows.map((u) => ({
+        id: u.id, email: u.email, name: u.name, phone: u.phone, status: u.status,
+        createdAt: u.createdAt, lastLoginAt: u.lastLoginAt,
+        billing: JSON.parse(u.billing || '{}'),
+        activePlan: u.subscriptions[0]?.plan.name || null,
+        subscriptionExpires: u.subscriptions[0] ? u.subscriptions[0].expiresAt : null,
+        ordersCount: u.orders.length,
+        lifetimeValue: Math.round(u.orders.filter((o) => ['PAID', 'COMPLETED'].includes(o.status)).reduce((a, o) => a + o.total, 0) * 100) / 100,
+        devicesCount: u.devices.length,
+        ticketsCount: u.tickets.length,
+      })),
+      total, page, size,
+    });
+  } catch (e) {
+    return jsonErr(e);
+  }
+}
